@@ -1,5 +1,5 @@
 ---
-title: "Predict correct exercise movement using ML"
+title: "Predicting correct exercise movement using ML"
 author: "Michael Lagunov"
 date: "8/29/2020"
 output:
