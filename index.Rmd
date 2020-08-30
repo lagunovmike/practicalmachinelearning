@@ -1,0 +1,117 @@
+---
+title: "Predict correct exercise movement using ML"
+author: "Michael Lagunov"
+date: "8/29/2020"
+output:
+  prettydoc::html_pretty:
+    theme: HPSTR
+    highlight: github
+---
+
+# Summary
+
+The following work is the final assignment of the Coursera JHU Data Science Specialization, Practical Machine Learning class. In this assignment the main goal is to apply new knowledge of Machine Learning on the real data, classify the correct exercise movement among wrong
+
+
+# Assignment description
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+The mentioned paragraph has been taken from the Coursera class
+
+# Assignment body
+
+## Setting workspace and loading data
+
+Libraries loading and setting the seed
+
+```{r "libraries", results='hide', message=FALSE}
+library(caret) # ML
+library(doParallel) # Fro parallel model fitting
+set.seed(12345)
+```
+
+
+Class A, that we would like to classify corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes.
+
+
+Download the data and use cross-validation on the training at 70:30, since the set is relatively large. And use pml-testing.csv as a validation, that would be used to solve the quiz
+
+```{r, "data load"}
+pmlTrainingURL <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+                           na.strings = c("#DIV/0!", "NA"))
+pmlTestingURL <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", 
+                          na.strings = c("#DIV/0!", "NA"))
+inTrain <- createDataPartition(pmlTrainingURL$classe, p = 0.7, list = FALSE)
+
+training <- pmlTrainingURL[inTrain,]
+testing <- pmlTrainingURL[-inTrain,]
+validation <- pmlTestingURL
+```
+
+## Features selection
+
+Since there are 160 features in the dataset, remove some that have few variation
+
+```{r "nzv for train"}
+nzv <- nearZeroVar(training)
+trainSub <- training[,-nzv]
+ncol(trainSub)
+```
+## Dealing with missing values
+
+For data imputing Knn method is used as a model pre process
+
+```{r "knn for train"}
+preObj <- preProcess(trainSub, method = "knnImpute")
+predObj <- predict(preObj, trainSub)
+```
+
+
+Next, remove unnecessary variables, that contain entry's ID, User's name and date stamp in the string format
+
+```{r "remove unnecessary variables"}
+predObj <- predObj[,-c(1,2,5)]
+```
+
+## Fitting the model
+
+Random Forest algorithm would be used for machine learning. It is very precise for classification tasks. To make the fitting a little faster, use parallel computation from doParallel library
+
+```{r "model fitting"}
+registerDoParallel()
+modFit <- train(classe ~ ., data = predObj, method = "parRF",
+                tuneGrid=data.frame(mtry=5),
+                trControl=trainControl(method="none"))
+modFit
+```
+
+# Applying the model into the test data
+
+After fitting the model, apply it to the test data. Before that, process it with the same steps, as with train data - select variables and impute the missing values, using training predictions
+
+```{r "applying to test data"}
+testSub <- testing[,-nzv]
+testPredObj <- predict(preObj, testSub)
+
+testPred <- predict(modFit, newdata = testPredObj)
+res <- confusionMatrix(testPred, factor(testPredObj$classe))
+res
+```
+## Applying the model into the validation data
+
+Predicted accuracy exceed 99%, which is great. Now apply the model into the validation data, to solve the final course quiz
+
+```{r "applying to validation-quiz data"}
+validSub <- validation[,-nzv]
+validPredObj <- predict(preObj, validSub)
+
+validPred <- predict(modFit, newdata = validPredObj)
+res <- data.frame(case = 1:length(validPred), validPred)
+res # All correct (checked by quiz)
+```
+
+
+# Conclusion
+
+In this assessment, machine learning algorithm has been used for predicting the right exercise movement. Results showed, accuracy on the test data was above 99%. Also, all the predicted values from the validation data were correct, that was examined by the final course quiz
